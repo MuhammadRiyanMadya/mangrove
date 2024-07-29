@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+
 from PySide6.QtWidgets import (QWidget,QApplication, QMainWindow,
                                QGridLayout, QLineEdit, QSpinBox,
                                QGroupBox, QDialog, QVBoxLayout,
@@ -8,10 +8,12 @@ from PySide6.QtWidgets import (QWidget,QApplication, QMainWindow,
                                QSpinBox, QTabWidget, QSizePolicy,
                                QTableWidget)
 import pyqtgraph as pg
+from pyqtgraph import QtCore
 import sys
-
+import time
 
 import os
+from datetime import datetime
 
 ##def find(path, dire):
 ##    for folder in os.listdir(path):
@@ -32,11 +34,18 @@ import os
 ##
 ##find(r'C:\Users\mrm\Documents', 'python')
 
+import time
+timestamp1 = time.mktime(time.strptime('2024-01-01 00:00:00', '%Y-%m-%d %H:%M:%S'))
+timestamp2 = time.mktime(time.strptime('2024-08-01 00:00:00', '%Y-%m-%d %H:%M:%S'))
 
-
+date = []
+while timestamp1 < timestamp2:
+    date.append(timestamp1)
+    timestamp1 = timestamp1+3600
+print()
+print(datetime.fromtimestamp(date[-1]).strftime('%Y-%m-%d %H:%M:%S'))
 
 def xyleneOpener(path):
-    numberDB = np.array([])
     tdDB = np.array([])
     xylDB = np.array([])
     counter = 1
@@ -44,10 +53,8 @@ def xyleneOpener(path):
         newpath = os.chdir(path + '\\' + docs)
             
         for file in os.listdir(newpath):
-            if '.xlsx' in file:
+            if '.xlsx' in file or '.XLSx':
 
-                np.append(numberDB, counter)
-                
                 df = pd.read_excel(file, header = 0, usecols="B:O")
 
                 xylBool = df == 'XYL'
@@ -65,8 +72,18 @@ def xyleneOpener(path):
                 xylDB = np.append(xylDB, df[:,xylindex][15:39])
 
                 counter += 1
+    numberDB = np.linspace(1,len(tdDB),len(tdDB))
+    
+    for val in xylDB:
+        if type(val) == str:
+            valindex = np.where(xylDB == val)
+            xylDB[valindex[0][0]] = np.nan
+
+    for val in tdDB:
+        if type(val) == str:
+            valindex = np.where(tdDB == val)
+            tdDB[valindex[0][0]] = np.nan
             
-    print(counter)
                 
     return numberDB, tdDB, xylDB
 
@@ -76,23 +93,43 @@ def dataNormalizer(data):
     while i < len(data):
         if not np.isnan(data[i]):
             index = i
-            print(index)
         else:
             data[i] = data[index]
         i += 1
     return data
 
-numDB, tdrDB, xylDB = xyleneOpener(r'C:\Users\mrm\Desktop\Catalyst Change\Inline History\2024')
+##numDB, tdrDB, xylDB = xyleneOpener(r'C:\Users\ssv\Documents\MRM\PP\2024')
+##
+##
+##xyleneDB = np.vstack((numDB, tdrDB, xylDB)).T
+##np.savetxt(r'C:\Users\ssv\Documents\MRM\PP\xyleneDB.csv', xyleneDB, delimiter=",")
 
-xyleneDB = np.asarray(numDB, tdrDB, xylDB)
-np.savetext('xyleneDB.csv', xyleneDB, delimiter=",")
+
+df = pd.read_csv(r'C:\Users\ssv\Documents\MRM\PP\xyleneDB.csv', header = None)
+numDB = df.values.T[0]
+tdrDB = df.values.T[1]
+xylDB = df.values.T[2]
+
 tdrDB = dataNormalizer(tdrDB)
 xylDB = dataNormalizer(xylDB)
-tdr = list(tdr)
-xyl = list(xyl)
+tdr = list(tdrDB)
+xyl = list(xylDB)
 
-print(tdrDB)
-print(xylDB)
+xylHigh = []
+xylLow = []
+for i in numDB:
+    xylHigh.append(5)
+    xylLow.append(2.5)
+
+##for i in range(len(xyl)):
+##    if xyl[i] < 2.5:
+##        print(i)
+##        print(xyl[i])
+##        print(datetime.fromtimestamp(date[i]).strftime('%Y-%m-%d %H:%M:%S'))
+##        print()
+
+
+
 
 ##def plotter(xdata, ydata1, ydata2):    
 ##    fig, ax1 = plt.subplots()
@@ -117,21 +154,21 @@ print(xylDB)
 
 class mainWindow(QWidget):
     
-    def __init__(self):
+    def __init__(self, xdata, ydata1, ydata2):
         super().__init__()
         self.setWindowTitle("History Peaks")
         layout = QGridLayout(self)
-        layout.setContentsMargins(10,10,10,10)
+##        layout.setContentsMargins(10,10,10,10)
+
+        self.xdata = xdata
+        self.ydata1 = ydata1
+        self.ydata2 = ydata2
+
         layout.addWidget(self.graphConfig())
+    def setItem(self, pos):
+        pos = time.mktime(time.strptime(pos, '%Y-%m-%d %H:%M:%S'))
+        self.v1.addItem(pg.InfiniteLine(pos, angle=90, movable = False,name='HR -> ZN', pen=pg.mkPen('g', width=1, style=QtCore.Qt.SolidLine)))
         
-    def setData(self, xdata, ydata1, ydata2):
-
-        self.v1.addItem(pg.PlotCurveItem(xdata, ydata1, pen='#2E2EFE'))
-        self.v2.addItem(pg.PlotCurveItem(xdata, ydata2, pen='#2EFEF7'))
-
-        self.v1.setYRange(0,400, padding = 0.1)
-        self.v2.setYRange(0,6, padding = 0.1)
-
     def graphConfig(self):
         self.graph = pg.GraphicsView()
         self.graph.setWindowTitle('History Peaks')
@@ -154,7 +191,7 @@ class mainWindow(QWidget):
         #v1 is the main plot, it has its own box
         self.p1 = pg.PlotItem()
         self.v1 = self.p1.vb
-        self.l.addItem(self.p1, row = 2, col = 3, rowspan = 2, colspan = 1)
+        self.l.addItem(self.p1, row = 2, col = 0, rowspan = 2, colspan = 1)
 
         # time axis
         self.timeAxis = pg.DateAxisItem(orientation='bottom')
@@ -169,10 +206,24 @@ class mainWindow(QWidget):
         self.v2.setXLink(self.v1)
         #Axis label
         self.p1.getAxis('left').setLabel('TD ratio', color='#2E2EFE')
+        self.p1.getAxis('bottom').setLabel('Time', color='#000000')
         self.a2.setLabel('Xylene %', color='#FEFE2E')
         self.v1.enableAutoRange(axis= pg.ViewBox.XYAxes, enable=True)
         self.v1.sigResized.connect(self.updateViews)
         self.updateViews()
+
+        self.v1.addItem(pg.PlotCurveItem(self.xdata, self.ydata1, pen='#2E2EFE'))
+        self.v2.addItem(pg.PlotCurveItem(self.xdata, self.ydata2, pen='#FEFE2E'))
+        self.v2.addItem(pg.PlotCurveItem(self.xdata, xylHigh, pen='#FEFE2E'))
+        self.v2.addItem(pg.PlotCurveItem(self.xdata, xylLow, pen='#FEFE2E'))
+
+##        self.v1.setXRange(min(self.xdata), max(self.xdata))
+##        self.v1.setYRange(0,400, padding = 0.1)
+##        self.v2.setYRange(0,6, padding = 0.1)
+        region = pg.LinearRegionItem()
+        region.setZValue(1000)
+        self.v1.addItem(region, ignoreBounds = True)
+        
 
         return self.graph
     
@@ -180,21 +231,13 @@ class mainWindow(QWidget):
         self.v2.setGeometry(self.v1.sceneBoundingRect())
 
         return
-import time
-timestamp1 = time.mktime(time.strptime('2024-7-25 00:00:00', '%Y-%m-%d %H:%M:%S'))
+
+    
 
 
-##timer = np.linspace(timestamp1, timestamp1+24*3600, 24)
-##timer = list(timer)
-##print(timer)
-
-
-
-
-##
-##if __name__ == "__main__":
-##    app = QApplication(sys.argv)
-##    window = mainWindow()
-##    window.setData(timer, tdr, xyl)
-##    window.show()
-##    sys.exit(app.exec())
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = mainWindow(date, tdr, xyl)
+    window.setItem('2024-07-26 00:00:00')
+    window.show()
+    sys.exit(app.exec())
